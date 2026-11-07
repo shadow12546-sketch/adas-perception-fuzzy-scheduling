@@ -1,7 +1,9 @@
-venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-*.pt
-data/*.mp4
+datasets/
+runs/
+data/data2/
+data/data3/
 output/*.mp4
+*.pt
+__pycache__/
+*.py[cod]
+data/*.mp4
