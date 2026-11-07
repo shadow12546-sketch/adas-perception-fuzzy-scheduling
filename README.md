@@ -162,5 +162,4 @@ python main.py --video path/to/video.mp4    # custom video path
 
 ## Author
 
-**Altaaf Shaik**
-GitHub: [@shaikaltaaf123](https://github.com/shaikaltaaf123)
+Shivam Kumar
