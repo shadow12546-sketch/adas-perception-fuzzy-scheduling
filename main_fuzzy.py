@@ -65,7 +65,7 @@ def fuzzy_depth_interval(motion, load):
         ("slow", min(motion_low, load_low)),
         ("normal", min(motion_low, load_medium)),
         ("slow", min(motion_low, load_high)),
-        ("frequent", min(motion_medium, load_low)),
+        ("normal", min(motion_medium, load_low)),
         ("normal", min(motion_medium, load_medium)),
         ("slow", min(motion_medium, load_high)),
         ("frequent", motion_high),
@@ -81,7 +81,7 @@ def fuzzy_depth_interval(motion, load):
             elif output_set == "normal":
                 membership = trapezoid(value, 1.5, 2.5, 3.5, 4.5)
             else:
-                membership = trapezoid(value, 3.5, 4.5, 5.0, 5.0)
+                membership = trapezoid(value, 4.0, 4.5, 5.0, 5.0)
 
             # Mamdani implication uses min; outputs combine with max.
             aggregated[i] = max(
