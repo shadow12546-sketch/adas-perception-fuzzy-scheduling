@@ -42,6 +42,7 @@ class ObjectDetector:
     ):
         self.model = YOLO(model_size)
         self.confidence = confidence
+        self.relevant_classes = dict(COCO_ADAS_CLASSES)
 
         model_names = self.model.names
         if isinstance(model_names, dict):
