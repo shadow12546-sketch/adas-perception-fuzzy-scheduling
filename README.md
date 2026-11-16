@@ -1,165 +1,167 @@
-# ADAS Perception Pipeline
+# ADAS Perception Pipeline with Fuzzy Depth Scheduling
 
-[![Tests](https://github.com/shaikaltaaf123/adas-perception-pipeline/actions/workflows/tests.yml/badge.svg)](https://github.com/shaikaltaaf123/adas-perception-pipeline/actions/workflows/tests.yml)
+[![Tests](https://github.com/shadow12546-sketch/adas-perception-fuzzy-scheduling/actions/workflows/tests.yml/badge.svg)](https://github.com/shadow12546-sketch/adas-perception-fuzzy-scheduling/actions/workflows/tests.yml)
 
-A perception pipeline for dashcam footage that combines object detection, lane detection, depth estimation, and bird's eye view transformation. Object detection uses YOLOv8, depth estimation uses MiDaS, and lane detection / bird's eye view use classical OpenCV techniques.
+A research project exploring a dashcam perception pipeline that combines object detection, lane detection, relative depth estimation, and bird’s-eye-view visualization. It also investigates whether fuzzy logic can schedule depth estimation adaptively to reduce unnecessary computation.
 
----
+## Project Goals
+
+1. Build an integrated ADAS-style perception pipeline for traffic video.
+2. Evaluate adaptive depth scheduling as a way to reduce processing time while retaining useful scene information.
+
+Fuzzy scheduling is experimental. Current results do **not** establish a consistent end-to-end latency reduction.
 
 ## Demo
 
 ![Pipeline Demo](screenshots/pipeline_demo.png)
 
----
+## Features
 
-## What It Does
+- **Object detection:** YOLOv8 detects road users and traffic-related objects.
+- **Fine-tuned detector:** A YOLOv8n model trained on an 11-class self-driving-car dataset. Its labels are mapped to canonical classes used by the pipeline.
+- **Lane detection:** OpenCV Canny edge detection, a region-of-interest mask, Hough lines, and temporal smoothing estimate lane boundaries.
+- **Relative depth estimation:** MiDaS Small estimates relative depth; detections can be labeled CLOSE, MED, or FAR.
+- **Fuzzy depth scheduling:** A fuzzy-logic experiment adjusts how often depth estimation runs using frame motion and a high-motion safety override.
+- **Bird’s-eye view:** OpenCV perspective transformation projects detections onto a top-down view.
+- **Collision warning:** The visualization can show a warning when qualifying objects are detected close and ahead.
+- **Video output:** The pipeline saves a side-by-side perception and bird’s-eye-view video.
+- **Experiment logs:** The fuzzy version records per-frame scheduling decisions in a CSV file.
 
-- **Object Detection** — detects cars, pedestrians, cyclists, trucks, buses, traffic lights and stop signs using YOLOv8s
-- **Lane Detection** — detects and draws left and right lane boundaries using Hough Transform with temporal smoothing across 5 frames
-- **Depth Estimation** — estimates relative depth for each frame using MiDaS and labels each detected object as CLOSE / MED / FAR
-- **Bird's Eye View** — transforms the camera perspective to a top-down map showing object positions relative to the ego vehicle
-- **Collision Warning** — flashing warning when a vehicle or pedestrian is detected close and directly ahead
-- **Dual View Output** — side by side perception view and bird's eye view saved as output video
+> This is a research prototype, not a safety-certified driver assistance system.
 
----
+## Results So Far
 
-## Known Limitations
+### Fine-tuned YOLOv8n detector
 
-- **Depth is relative, not metric** — MiDaS outputs a per-frame normalized depth map (0-1), not real-world distances in meters. The CLOSE/MED/FAR labels and collision warning are based on this relative scale, which can shift between frames depending on scene content, and should not be treated as calibrated distance measurements.
-- **Lane detection assumes straight highway roads with clear markings** — the Hough Transform + ROI approach works best on well-marked, mostly-straight lanes. Curved roads, faded or missing markings, heavy traffic occlusion, and non-highway environments (city streets, intersections) will degrade or break lane detection.
+Held-out test-set evaluation at 512-pixel image size:
 
----
+| Metric | Result |
+| --- | ---: |
+| Precision | 0.731 |
+| Recall | 0.535 |
+| mAP@50 | 0.633 |
+| mAP@50–95 | 0.342 |
+
+These results apply to the dataset and evaluation setup used in this project; they should not be interpreted as performance on all road conditions.
+
+### Pipeline performance
+
+A baseline profile processed a 154-frame, 1242 × 374 video in 12.14 seconds—about 12.7 frames per second—using the fine-tuned YOLOv8n model at 512 pixels on an RTX 2050.
+
+In one fuzzy-scheduler run on the same video, depth estimation ran on 49 frames, compared with 51 calls for the fixed baseline schedule. This is a small reduction in depth calls; it does not, by itself, demonstrate a reliable end-to-end latency improvement. Processing speed varied between runs, so further controlled measurements are needed.
 
 ## Architecture
 
-Dashcam Video
-↓
-VideoProcessor (utils/video.py)
-↓
-Per Frame Pipeline
-├── ObjectDetector — YOLOv8s, COCO classes filtered to ADAS relevant
-├── LaneDetector — Canny edges → ROI mask → Hough lines → temporal smoothing
-├── DepthEstimator — MiDaS small model, runs every 3 frames
-└── BirdEyeView — Perspective transform → object projection
-↓
-DrawingUtils (utils/drawing.py)
-↓
-Side-by-side output video
+```mermaid
+flowchart TD
+    A[Input traffic video] --> B[Video processor]
+    B --> C[YOLOv8 object detection]
+    B --> D[OpenCV lane detection]
+    B --> E[Fuzzy depth scheduler]
+    E --> F[MiDaS depth estimation when scheduled]
+    B --> G[Bird's-eye-view projection]
+    C --> H[Visualization and collision warning]
+    D --> H
+    F --> H
+    G --> I[Side-by-side output video]
+    H --> I
+    E --> J[Per-frame CSV schedule log]
+```
 
----
-
-## Tech Stack
+## Technologies
 
 | Component | Technology |
-|---|---|
-| Object Detection | YOLOv8s (Ultralytics) |
-| Lane Detection | OpenCV — Canny + Hough Transform |
-| Depth Estimation | MiDaS Small (PyTorch Hub) |
-| Bird's Eye View | OpenCV Perspective Transform |
-| Framework | PyTorch |
-| Video Processing | OpenCV |
-| Testing | Pytest — 17 tests |
+| --- | --- |
+| Object detection | Ultralytics YOLOv8 |
+| Lane detection | OpenCV Canny and Hough Transform |
+| Depth estimation | MiDaS Small with PyTorch |
+| Fuzzy scheduling | Python fuzzy-rule scheduling logic |
+| Bird’s-eye view | OpenCV perspective transform |
+| Video processing | OpenCV |
+| Tests | Pytest |
 
----
+## Repository Structure
 
-## Project Structure
-
-adas-perception-pipeline/
+```text
+adas-perception-fuzzy-scheduling/
 ├── modules/
-│ ├── object_detection.py # YOLOv8 wrapper with ADAS class filtering
-│ ├── lane_detection.py # Hough transform + temporal smoothing
-│ ├── depth_estimation.py # MiDaS depth model wrapper
-│ └── bird_eye_view.py # Perspective transform + object projection
+│   ├── object_detection.py
+│   ├── lane_detection.py
+│   ├── depth_estimation.py
+│   └── bird_eye_view.py
 ├── utils/
-│ ├── drawing.py # Visualization, collision warning
-│ └── video.py # Video reader/writer
+│   ├── drawing.py
+│   └── video.py
 ├── tests/
-│ ├── test_smoke.py # Module load tests
-│ └── test_units.py # Function level unit tests
-├── config.py # All parameters in one place
-├── main.py # Pipeline entry point
-└── data/ # Place input videos here
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10 or 3.11
-- A dashcam or traffic video file
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/shaikaltaaf123/adas-perception-pipeline.git
-cd adas-perception-pipeline
+│   ├── test_smoke.py
+│   └── test_units.py
+├── screenshots/
+│   └── pipeline_demo.png
+├── data/                  # Input videos; large videos are not tracked
+├── output/                # Generated videos and experiment logs
+├── config.py
+├── main.py                # Fixed-schedule pipeline
+├── main_fuzzy.py          # Fuzzy depth-scheduling experiment
+└── main_profile.py        # Baseline profiling
 ```
 
-### 2. Create virtual environment
+## Setup
 
-```bash
+From the repository folder, create and activate a virtual environment, then install the dependencies:
+
+```cmd
 python -m venv venv
-venv\Scripts\activate        # Windows
-source venv/bin/activate     # Mac/Linux
+venv\Scripts\activate
+python -m pip install -r requirements.txt
 ```
 
-### 3. Install dependencies
+Place a traffic video in the `data/` folder, for example `data/traffic.mp4`.
 
-```bash
-pip install -r requirements.txt
-```
+### Model weights
 
-### 4. Add your video
-
-Place any dashcam video in the `data/` folder and rename it to `traffic.mp4`
-
-### 5. Run the pipeline
-
-```bash
-python main.py --video data/traffic.mp4 --output output/result.mp4
-```
-
-Press **Q** to stop. Output is saved to `output/result.mp4`
-
----
-
-## Configuration
-
-All parameters are in `config.py` — no need to touch any other file to tune the pipeline:
+Large model files and datasets are not included in this repository. The default model is selected in `config.py`. To use the fine-tuned detector, obtain or train its checkpoint and set `MODEL_SIZE` in `config.py` to its path. For example:
 
 ```python
-MODEL_SIZE = "yolov8s.pt"          # swap to yolov8n.pt for faster processing
-CONFIDENCE_THRESHOLD = 0.5          # lower for more detections
-DEPTH_SKIP_FRAMES = 3               # run depth every N frames
-LANE_SLOPE_THRESHOLD = 0.4          # minimum slope to count as a lane line
-BEV_OUTPUT_SIZE = (400, 600)        # bird's eye view dimensions
+MODEL_SIZE = r"runs/detect/yolov8n_udacity_30ep/weights/best.pt"
 ```
 
----
+The checkpoint must exist at that location on your machine.
+
+## Run the Pipeline
+
+Run the fixed-schedule pipeline:
+
+```cmd
+python main.py --video "data/traffic.mp4" --output "output/result.mp4" --no-window
+```
+
+Run the fuzzy depth-scheduling experiment:
+
+```cmd
+python main_fuzzy.py --video "data/traffic.mp4" --output "output/result_fuzzy.mp4" --no-window
+```
+
+Run a baseline profiling pass:
+
+```cmd
+python main_profile.py --video "data/traffic.mp4" --output "output/result_profile.mp4" --no-window
+```
+
+The fuzzy run also creates a CSV schedule log in `output/`.
 
 ## Run Tests
 
-```bash
-pip install pytest
-pytest tests/ -v
+```cmd
+python -m pytest tests/ -v
 ```
 
-![Tests Passing](screenshots/tests_passing.png)
+## Limitations
 
----
-
-## Command Line Options
-
-```bash
-python main.py --video path/to/video.mp4    # custom video path
-               --output path/to/output.mp4  # custom output path
-               --no-window                  # run without display
-               --skip-depth                 # skip depth estimation for faster FPS
-```
-
----
+- **Depth is relative, not metric.** MiDaS does not provide calibrated distances in meters. CLOSE/MED/FAR labels and collision-warning behavior are not reliable measurements of real-world distance.
+- **Lane detection has scene limits.** The classical Hough and ROI approach works best with visible lane markings. Curved roads, intersections, occlusion, and poor visibility can reduce its performance.
+- **Fuzzy scheduling needs broader evaluation.** Results can vary by video and run. Fewer depth calls do not necessarily mean lower total processing time.
+- **Detector performance depends on the data.** The reported test metrics apply to the specific dataset and evaluation setup used here.
 
 ## Author
 
-Shivam Kumar
+**Shivam Kumar**
